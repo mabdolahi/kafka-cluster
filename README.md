@@ -6,4 +6,6 @@ This is a simple Kafka cluster. The cluster contains 3 kafka nodes and 3 zookeep
 
 The kafka producer is implemented using python container. It will send public ip of the host to the broker every 5 second. The kafka consumer is implemented using python container. It will recive the messsage from kafka producess.
 
+* For the kafka cluster, bitnami kafka docker image has been used for this demonstration.
+
 The Producer and consumer settings can be passed via input.txt file, in order to change your setting.
