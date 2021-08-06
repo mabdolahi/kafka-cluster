@@ -10,9 +10,13 @@ def kafka_consumer():
   time.sleep(50)
   # Definning to read variables from file
   config = configparser.ConfigParser()
+  # Reading from input file
   config.read(sys.argv[1])
+  # Defining Broker server
   bootstrap_servers = config['settings']['brokers']
+  # Defining Topic
   topic = config['settings']['topic']
+  # Defining interval for consuming messages
   consume_interval = int(config['settings']['wait'])
   
   # defining consumer
