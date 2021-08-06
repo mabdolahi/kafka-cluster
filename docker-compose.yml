@@ -1,0 +1,184 @@
+version: "3.8"
+services:
+   zookeeper1:
+       image: bitnami/zookeeper:latest
+       restart: unless-stopped
+       hostname: zookeeper1
+       container_name: zookeeper1
+       ports:
+         - 2181:2181
+       networks:
+         - kafka_cluster
+       volumes:
+         - zookeeper1_data:/bitnami/zookeeper
+       environment:
+         - ZOO_SERVER_ID=1
+         - ZOO_PORT_NUMBER=2181
+         - ZOO_SERVERS=0.0.0.0:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
+         - ALLOW_ANONYMOUS_LOGIN=yes  # this is not recommended for production; you need to configure authentication
+   zookeeper2:
+       image: bitnami/zookeeper:latest
+       restart: unless-stopped
+       hostname: zookeeper2
+       container_name: zookeeper2
+       ports:
+         - 2182:2181
+       networks:
+         - kafka_cluster
+       volumes:
+         - zookeeper2_data:/bitnami/zookeeper
+      
+       environment: 
+         - ALLOW_ANONYMOUS_LOGIN=yes
+         - ZOO_SERVER_ID=2
+         - ZOO_PORT_NUMBER=2181
+         - ZOO_SERVERS=zookeeper1:2888:3888,0.0.0.0:2888:3888,zookeeper3:2888:3888
+   zookeeper3:
+       image: bitnami/zookeeper:latest
+       restart: unless-stopped
+       hostname: zookeeper3
+       container_name: zookeeper3
+       ports:
+         - 2183:2181
+       networks:
+         - kafka_cluster
+       volumes:
+         - zookeeper3_data:/bitnami/zookeeper
+       
+       environment:
+         - ALLOW_ANONYMOUS_LOGIN=yes
+         - ZOO_SERVER_ID=3
+         - ZOO_PORT_NUMBER=2181
+         - ZOO_SERVERS=zookeeper1:2888:3888,zookeeper2:2888:3888,0.0.0.0:2888:3888
+   kafka1:
+       image: 'bitnami/kafka:latest'
+       restart: unless-stopped
+       container_name: kafka1
+       hostname: kafka1
+       ports:
+         - 9091:9092
+       networks:
+         - kafka_cluster 
+       environment:
+         - KAFKA_BROKER_ID=1
+         - KAFKA_ZOOKEEPER_PROTOCOL=PLAINTEXT
+         - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+         - KAFKA_CFG_LISTENERS=INTERNAL://kafka1:9092,EXTERNAL://localhost:9091
+         - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+           # add another listener with the value of public dns name or public ip for accessing broker outside of dockerhost 
+           # you can export docker host ip into a variable and the call ${DOCKER_HOST_IP} here for external listener
+         - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka1:9092,EXTERNAL://localhost:9091 
+         - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+         - ALLOW_PLAINTEXT_LISTENER=yes
+         - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR= 3
+       volumes: 
+         - kafka1_data:/bitnami/kafka
+       depends_on:
+         - zookeeper1
+         - zookeeper2
+         - zookeeper3
+   kafka2:
+       image: 'bitnami/kafka:latest'
+       restart: unless-stopped
+       container_name: kafka2
+       hostname: kafka2
+       ports:
+         - '9093:9092'
+       networks:
+         - kafka_cluster   
+       environment:
+         - KAFKA_BROKER_ID=2
+         - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+         - KAFKA_CFG_LISTENERS=INTERNAL://kafka2:9092,EXTERNAL://localhost:9093
+         - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+         # for connectivity outside of docker host, we need to cofigure another listener with the public ip address
+         - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka2:9092,EXTERNAL://localhost:9093  # ${DOCKER_HOST_IP:-127.0.0.1}
+         - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+         - ALLOW_PLAINTEXT_LISTENER=yes
+         - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR= 3
+       volumes: 
+         - kafka2_data:/bitnami/kafka
+       depends_on:
+         - zookeeper1
+         - zookeeper2
+         - zookeeper3  
+   kafka3:
+       image: 'bitnami/kafka:latest'
+       restart: unless-stopped
+       container_name: kafka3
+       hostname: kafka3
+       ports:
+         - '9094:9092'
+       networks:
+         - kafka_cluster   
+       environment:
+         - KAFKA_BROKER_ID=3
+         - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+         - KAFKA_CFG_LISTENERS=INTERNAL://kafka3:9092,EXTERNAL://:9094
+         - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+         - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka3:9092,EXTERNAL://localhost:9094
+         - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper1:2181,zookeeper2:2181,zookeeper3:2181
+         - ALLOW_PLAINTEXT_LISTENER=yes
+         - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR= 3
+       volumes: 
+         - kafka3_data:/bitnami/kafka
+       depends_on:
+         - zookeeper1
+         - zookeeper2
+         - zookeeper3
+   kafka-producer:
+       build: ./producer
+       image: producer
+       container_name: producer
+       hostname: producer
+       restart: unless-stopped  
+       networks:
+         - kafka_cluster
+       depends_on:
+         - kafka1
+         - kafka2
+         - kafka3
+
+        
+   kafka-consumer:
+       build: ./consumer
+       image: consumer
+       container_name: consumer
+       hostname: consumer
+       restart: unless-stopped
+       networks:
+         - kafka_cluster
+       depends_on:
+         - kafka-producer
+        
+   kafdrop:
+       image: obsidiandynamics/kafdrop
+       restart: "no"
+       ports:
+         - "9000:9000"
+       networks:
+         - kafka_cluster 
+       environment:
+         KAFKA_BROKERCONNECT: "kafka1:9092,kafka2:9092,kafka3:9092"
+       depends_on:
+         - kafka1
+         - kafka2
+         - kafka3
+networks:
+   kafka_cluster:
+       name: kafka
+       driver: bridge
+
+volumes:
+   zookeeper1_data:
+       name: zookeeper1_data
+   zookeeper2_data: 
+       name: zookeeper2_data
+   zookeeper3_data:
+       name: zookeeper3_data
+   kafka1_data:
+       name: kafka1_data
+   kafka2_data:
+       name: kafka2_data
+   kafka3_data:
+       name: kafka3_data
