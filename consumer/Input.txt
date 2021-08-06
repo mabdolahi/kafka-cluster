@@ -1,0 +1,5 @@
+[settings]
+
+brokers = kafka1:9092, kafka2:9092, kafka3:9092
+wait = 5
+topic= Public_IP
